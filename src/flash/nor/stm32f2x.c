@@ -532,28 +532,53 @@ static int stm32x_otp_protect(struct flash_bank *bank, unsigned int first,
 {
 	struct target *target = bank->target;
 	uint32_t lock_base;
-	int i, retval;
+	int retval;
 	uint8_t lock;
+
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	assert(stm32x_is_otp(bank));
+
+	if (!stm32x_is_otp_unlocked(bank)) {
+		LOG_ERROR("OTP memory bank is disabled for write commands.");
+		return ERROR_FAIL;
+	}
 
 	assert((first <= last) && (last < bank->num_sectors));
 
 	lock_base = stm32x_otp_is_f7(bank) ? STM32F7_OTP_LOCK_BASE
 		  : STM32F2_OTP_LOCK_BASE;
 
-	for (i = first; first <= last; i++) {
+	retval = stm32x_unlock_reg(target);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = target_write_u32(target, stm32x_get_flash_reg(bank, STM32_FLASH_CR),
+			FLASH_PG | FLASH_PSIZE_8);
+	if (retval != ERROR_OK)
+		return retval;
+
+	for (unsigned int i = first; i <= last; i++) {
 		retval = target_read_u8(target, lock_base + i, &lock);
 		if (retval != ERROR_OK)
 			return retval;
-		if (lock)
+		if (!lock)
 			continue;
 
-		lock = 0xff;
+		lock = 0x00;
 		retval = target_write_u8(target, lock_base + i, lock);
+		if (retval != ERROR_OK)
+			return retval;
+
+		retval = stm32x_wait_status_busy(bank, FLASH_WRITE_TIMEOUT);
 		if (retval != ERROR_OK)
 			return retval;
 	}
 
-	return ERROR_OK;
+	return target_write_u32(target, STM32_FLASH_CR, FLASH_LOCK);
 }
 
 static int stm32x_protect_check(struct flash_bank *bank)
@@ -653,11 +678,6 @@ static int stm32x_protect(struct flash_bank *bank, int set, unsigned int first,
 	struct target *target = bank->target;
 	struct stm32x_flash_bank *stm32x_info = bank->driver_priv;
 
-	if (target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
-
 	if (stm32x_is_otp(bank)) {
 		if (!set) {
 			LOG_ERROR("OTP protection can only be enabled");
@@ -665,6 +685,11 @@ static int stm32x_protect(struct flash_bank *bank, int set, unsigned int first,
 		}
 
 		return stm32x_otp_protect(bank, first, last);
+	}
+
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
 	}
 
 	/* read protection settings */
@@ -703,11 +728,6 @@ static int stm32x_write_block(struct flash_bank *bank, const uint8_t *buffer,
 	static const uint8_t stm32x_flash_write_code[] = {
 #include "../../../contrib/loaders/flash/stm32/stm32f2x.inc"
 	};
-
-	if (stm32x_is_otp(bank) && !stm32x_is_otp_unlocked(bank)) {
-		LOG_ERROR("OTP memory bank is disabled for write commands.");
-		return ERROR_FAIL;
-	}
 
 	if (target_alloc_working_area(target, sizeof(stm32x_flash_write_code),
 			&write_algorithm) != ERROR_OK) {
@@ -799,6 +819,11 @@ static int stm32x_write(struct flash_bank *bank, const uint8_t *buffer,
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if (stm32x_is_otp(bank) && !stm32x_is_otp_unlocked(bank)) {
+		LOG_ERROR("OTP memory bank is disabled for write commands.");
+		return ERROR_FAIL;
 	}
 
 	if (offset & 0x1) {
