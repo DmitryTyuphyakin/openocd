@@ -2779,6 +2779,20 @@ int target_write_phys_u8(struct target *target, target_addr_t address, uint8_t v
 	return retval;
 }
 
+int target_modify_u32(struct target *target, target_addr_t address,
+                      uint32_t set_mask, uint32_t clear_mask)
+{
+    uint32_t reg = 0;
+
+    int retval = target_read_u32(target, address, &reg);
+    if (retval != ERROR_OK) return retval;
+
+    reg &= ~clear_mask;
+    reg |=    set_mask;
+
+    return target_write_u32(target, address, reg);
+}
+
 static int find_target(struct command_invocation *cmd, const char *name)
 {
 	struct target *target = get_target(name);

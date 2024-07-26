@@ -772,6 +772,8 @@ int target_write_phys_u32(struct target *target, target_addr_t address, uint32_t
 int target_write_phys_u16(struct target *target, target_addr_t address, uint16_t value);
 int target_write_phys_u8(struct target *target, target_addr_t address, uint8_t value);
 
+int target_modify_u32(struct target *target, target_addr_t address, uint32_t set_mask, uint32_t clear_mask);
+
 /* Issues USER() statements with target state information */
 int target_arch_state(struct target *target);
 
