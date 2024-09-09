@@ -118,6 +118,16 @@ struct stmspi_flash_bank {
     int ( *xfer)(struct flash_bank *bank, const void *cmd, size_t cmd_size,
                                           const void *tx,  size_t tx_size,
                                           void *rx,  size_t rx_size);
+
+    int (*configure)(struct flash_bank*);
+    int (*write)(struct flash_bank*, const uint8_t*, uint32_t, uint32_t);
+    int (*read)(struct flash_bank*, uint8_t*, uint32_t, uint32_t);
+    int (*erase)(struct flash_bank*, uint32_t, uint32_t);
+    int (*erase_all)(struct flash_bank*);
+    int (*protect)(struct flash_bank*, int, unsigned int, unsigned int);
+    int (*erase_check)(struct flash_bank*);
+    int (*verify)(struct flash_bank*, const uint8_t*, uint32_t, uint32_t);
+    int (*protect_check)(struct flash_bank*);
 };
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

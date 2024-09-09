@@ -168,42 +168,52 @@ static int xfer(struct flash_bank *bank, const void *cmd, size_t cmd_size,
 
 static int stmspi_erase(struct flash_bank *bank, unsigned int first, unsigned int last)
 {
-    return s25fl_erase(bank, first, last);
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->erase) ? info->erase(bank, first, last)
+                         : ERROR_NOT_IMPLEMENTED;
 }
 
 static int stmspi_read(struct flash_bank *bank, uint8_t *buffer, uint32_t offset, uint32_t count)
 {
-    return s25fl_read(bank, buffer, offset, count);
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->read) ? info->read(bank, buffer, offset, count)
+                        : ERROR_NOT_IMPLEMENTED;
 }
 
 static int stmspi_write(struct flash_bank *bank, const uint8_t *buffer, uint32_t offset, uint32_t count)
 {
-    return s25fl_write(bank, buffer, offset, count);
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->write) ? info->write(bank, buffer, offset, count)
+                         : ERROR_NOT_IMPLEMENTED;
 }
 
 
 static int stmspi_protect(struct flash_bank *bank, int set, unsigned int first, unsigned int last)
 {
-    LOG_DEBUG("%s", __func__);
-    return ERROR_OK;
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->protect) ? info->protect(bank, set, first, last)
+                           : ERROR_NOT_IMPLEMENTED;
 }
 
-static int stmspi_blank_check(struct flash_bank *bank)
+static int stmspi_erase_check(struct flash_bank *bank)
 {
-    LOG_DEBUG("%s", __func__);
-    return ERROR_OK;
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->erase_check) ? info->erase_check(bank)
+                               : ERROR_NOT_IMPLEMENTED;
 }
 
 static int stmspi_verify(struct flash_bank *bank, const uint8_t *buffer, uint32_t offset, uint32_t count)
 {
-    LOG_DEBUG("%s: offset=0x%08" PRIx32 " count=0x%08" PRIx32, __func__, offset, count);
-    return ERROR_OK;
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->verify) ? info->verify(bank, buffer, offset, count)
+                          : ERROR_NOT_IMPLEMENTED;
 }
 
 static int stmspi_protect_check(struct flash_bank *bank)
 {
-    LOG_DEBUG("%s", __func__);
-    return ERROR_OK;
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->protect_check) ? info->protect_check(bank)
+                                 : ERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -332,10 +342,12 @@ static int stmspi_probe(struct flash_bank *bank)
     retval = _dma_init(bank);
     if (retval != ERROR_OK) return retval;
 
-    retval = s25fl_configure(bank);
-    if (retval != ERROR_OK) return retval;
-
-    info->probed = true;
+    if (info->configure) {
+        retval = info->configure(bank);
+        info->probed = (retval == ERROR_OK);
+    } else {
+        retval = ERROR_NOT_IMPLEMENTED;
+    }
 
     return retval;
 }
@@ -372,6 +384,10 @@ static int stmspi_get_info(struct flash_bank *bank, struct command_invocation *c
 }
 
 //~~~~~~~~ CUT HERE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+typedef enum {
+    STMSPI_FLASH_S25FL,
+    STMSPI_FLASH_NUMBER
+} stmspi_flash_type;
 
 FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
 {
@@ -379,6 +395,7 @@ FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
     uint32_t cs_base = 0;
     uint32_t cs_number = 0;
     bool cs_active_high = false;
+    int flash_type = -1;
     uint32_t spi_number = 0;
     uint32_t spi_io_base[] = {
         0xffffffff, // <unavailable>
@@ -402,7 +419,7 @@ FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
 
 
     // Get base address from arguments
-    if (CMD_ARGC < 10) {
+    if (CMD_ARGC < 11) {
         LOG_ERROR("invalid syntax");
         return ERROR_COMMAND_SYNTAX_ERROR;
     }
@@ -419,6 +436,13 @@ FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
     COMMAND_PARSE_NUMBER(u32, CMD_ARGV[8], cs_number);
     COMMAND_PARSE_ON_OFF(     CMD_ARGV[9], cs_active_high);
 
+    // Parse SPI Flash
+    if (strncmp(CMD_ARGV[10], "s25fl", strlen(CMD_ARGV[10])) == 0) {
+        flash_type = STMSPI_FLASH_S25FL;
+    } else {
+        LOG_ERROR("incorrect SPI flash: %s (s25fl)", CMD_ARGV[10]);
+        return ERROR_COMMAND_SYNTAX_ERROR;
+    }
 
     LOG_DEBUG("%s: SPI_%d, CS: base(0x%08x), number(%u), active_high(%b)",
              __func__, spi_number, cs_base, cs_number, cs_active_high);
@@ -445,6 +469,20 @@ FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
 
     // Callback
     info->xfer = xfer;
+
+    // Flash
+    switch (flash_type) {
+        case STMSPI_FLASH_S25FL:
+            info->configure = s25fl_configure;
+            info->write     = s25fl_write;
+            info->read      = s25fl_read;
+            info->erase     = s25fl_erase;
+            info->erase_all = s25fl_erase_all;
+            break;
+        default:
+            assert(false);
+    }
+
 
     bank->driver_priv = info;
 
@@ -653,7 +691,9 @@ COMMAND_HANDLER(stmspi_handle_mass_erase_command)
     retval = stmspi_auto_probe(bank);
     if (retval != ERROR_OK) return retval;
 
-    return s25fl_erase_all(bank);
+    struct stmspi_flash_bank *info = bank->driver_priv;
+    return (info->erase_all) ? info->erase_all(bank)
+                             : ERROR_NOT_IMPLEMENTED;
 }
 
 //~~~~~~~~ CUT HERE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -706,7 +746,7 @@ const struct flash_driver stmspi_flash = {
     .verify             = stmspi_verify,
     .probe              = stmspi_probe,
     .auto_probe         = stmspi_auto_probe,
-    .erase_check        = stmspi_blank_check,
+    .erase_check        = stmspi_erase_check,
     .protect_check      = stmspi_protect_check,
     .info               = stmspi_get_info,
     .free_driver_priv   = default_flash_free_driver_priv,
