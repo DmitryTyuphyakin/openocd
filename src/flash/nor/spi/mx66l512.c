@@ -5,6 +5,8 @@
 #include <helper/log.h>
 #include <flash/nor/stmspi.h>
 
+#include "utils.h"
+
 
 struct jedec_memory_info {
     uint8_t manufacturer;
@@ -355,8 +357,11 @@ int mx66l512_write(struct flash_bank *bank,
 
         LOG_INFO("%s: offset=0x%08x count=0x%04x", __func__, address, chunk_size);
 
-        retval = __write_page(bank, address, buffer, chunk_size);
-        if (retval) return retval;
+        // SKip empty page
+        if (!filled(buffer, chunk_size, 0xff)) {
+            retval = __write_page(bank, address, buffer, chunk_size);
+            if (retval) return retval;
+        }
 
         buffer += chunk_size;
         count  -= chunk_size;
