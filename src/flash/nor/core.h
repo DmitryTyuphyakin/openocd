@@ -30,6 +30,8 @@ struct flash_sector {
 	uint32_t offset;
 	/** Number of bytes in this flash sector. */
 	uint32_t size;
+	/** Number of bytes of flash sector page. Useful for flash with hybrid configuration. */
+	uint32_t page_size;
 	/**
 	 * Indication of erasure status: 0 = not erased, 1 = erased,
 	 * other = unknown.  Set by @c flash_driver::erase_check only.

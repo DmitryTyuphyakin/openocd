@@ -283,7 +283,6 @@ int s25fl_write(struct flash_bank *bank, const uint8_t *buffer,
     uint32_t address = 0;
     size_t page =0;
     size_t page_number = 0;
-    size_t page_size = 0;
     int retval = ERROR_OK;
     bool new_sector = true;
 
@@ -313,14 +312,13 @@ int s25fl_write(struct flash_bank *bank, const uint8_t *buffer,
             sector->is_erased = false;
 
             page = 0;
-            page_size = S25FL_HYBRID_PAGE_SIZE; // TODO: checkup!
-            page_number = sector->size / page_size;
+            page_number = sector->size / sector->page_size;
             new_sector  = false;
         }
 
-        address = sector->offset + page * page_size;
-        chunk_size = (count > page_size) ? page_size
-                                         : count;
+        address = sector->offset + page * sector->page_size;
+        chunk_size = (count > sector->page_size) ? sector->page_size
+                                                 : count;
 
         LOG_INFO("%s: offset=0x%08x count=0x%04x", __func__, address, chunk_size);
         
@@ -377,6 +375,7 @@ int s25fl_configure(struct flash_bank *bank)
         while (idx<bank->num_sectors) {
             bank->sectors[idx].offset       = offset;
             bank->sectors[idx].size         = S25FL_UNIFORM_SECTOR_SIZE;
+            bank->sectors[idx].page_size    = S25FL_UNIFORM_PAGE_SIZE;
             bank->sectors[idx].is_erased    = false;
     		bank->sectors[idx].is_protected = 0;
 
@@ -391,6 +390,7 @@ int s25fl_configure(struct flash_bank *bank)
         while (idx<S25FL_PARAMETER_SECTOR_NUMBER) {
             bank->sectors[idx].offset = offset;
             bank->sectors[idx].size = S25FL_PARAMETER_SECTOR_SIZE;
+            bank->sectors[idx].page_size = S25FL_HYBRID_PAGE_SIZE;
             bank->sectors[idx].is_erased = false;
     		bank->sectors[idx].is_protected = 0;
 
@@ -401,6 +401,7 @@ int s25fl_configure(struct flash_bank *bank)
         while (idx<bank->num_sectors) {
             bank->sectors[idx].offset = offset;
             bank->sectors[idx].size = S25FL_SECTOR_SIZE;
+            bank->sectors[idx].page_size = S25FL_HYBRID_PAGE_SIZE;
             bank->sectors[idx].is_erased = false;
     		bank->sectors[idx].is_protected = 0;
 
