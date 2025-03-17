@@ -67,6 +67,7 @@ NOR_DRIVERS = \
 	%D%/stmspi.c \
 	%D%/spi/s25fl.c \
 	%D%/spi/mx66l512.c \
+	%D%/spi/w25q256fv.c \
 	%D%/spi/utils.c \
 	%D%/stmqspi.c \
 	%D%/stellaris.c \

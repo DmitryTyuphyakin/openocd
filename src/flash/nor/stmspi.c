@@ -18,6 +18,7 @@
 
 #include "spi/s25fl.h"
 #include "spi/mx66l512.h"
+#include "spi/w25q256fv.h"
 
 
 static int _spi_cs(struct flash_bank *bank, bool enable)
@@ -388,6 +389,7 @@ static int stmspi_get_info(struct flash_bank *bank, struct command_invocation *c
 typedef enum {
     STMSPI_FLASH_S25FL,
     STMSPI_FLASH_MX66L512,
+    STMSPI_FLASH_W25Q256FV,
     STMSPI_FLASH_NUMBER
 } stmspi_flash_type;
 
@@ -443,8 +445,10 @@ FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
         flash_type = STMSPI_FLASH_S25FL;
     } else if (strncmp(CMD_ARGV[10], "mx66l512", strlen(CMD_ARGV[10])) == 0) {
         flash_type = STMSPI_FLASH_MX66L512;
+    } else if (strncmp(CMD_ARGV[10], "w25q256fv", strlen(CMD_ARGV[10])) == 0) {
+        flash_type = STMSPI_FLASH_W25Q256FV;
     } else {
-        LOG_ERROR("incorrect SPI flash: %s (s25fl/mx66l512)", CMD_ARGV[10]);
+        LOG_ERROR("incorrect SPI flash: %s (s25fl/mx66l512/w25q256fv)", CMD_ARGV[10]);
         return ERROR_COMMAND_SYNTAX_ERROR;
     }
 
@@ -489,6 +493,13 @@ FLASH_BANK_COMMAND_HANDLER(stmspi_flash_bank_command)
             info->read      = mx66l512_read;
             info->erase     = mx66l512_erase;
             info->erase_all = mx66l512_erase_all;
+            break;
+        case STMSPI_FLASH_W25Q256FV:
+            info->configure = w25q256fv_configure;
+            info->write     = w25q256fv_write;
+            info->read      = w25q256fv_read;
+            info->erase     = w25q256fv_erase;
+            info->erase_all = w25q256fv_erase_all;
             break;
         default:
             assert(false);
